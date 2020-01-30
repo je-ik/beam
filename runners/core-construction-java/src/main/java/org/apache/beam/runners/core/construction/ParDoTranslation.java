@@ -268,6 +268,11 @@ public class ParDoTranslation {
           }
 
           @Override
+          public boolean isRequiresTimeSortedInput() {
+            return signature.processElement().requiresTimeSortedInput();
+          }
+
+          @Override
           public String translateRestrictionCoderId(SdkComponents newComponents) {
             return restrictionCoderId;
           }
@@ -728,6 +733,8 @@ public class ParDoTranslation {
 
     boolean isSplittable();
 
+    boolean isRequiresTimeSortedInput();
+
     String translateRestrictionCoderId(SdkComponents newComponents);
   }
 
@@ -741,6 +748,7 @@ public class ParDoTranslation {
         .putAllTimerSpecs(parDo.translateTimerSpecs(components))
         .putAllSideInputs(parDo.translateSideInputs(components))
         .setSplittable(parDo.isSplittable())
+        .setRequiresTimeSortedInput(parDo.isRequiresTimeSortedInput())
         .setRestrictionCoderId(parDo.translateRestrictionCoderId(components))
         .build();
   }

@@ -837,6 +837,7 @@ public class DoFnSignatures {
     MethodAnalysisContext methodContext = MethodAnalysisContext.create();
 
     boolean requiresStableInput = m.isAnnotationPresent(DoFn.RequiresStableInput.class);
+    boolean requiresTimeSortedInput = m.isAnnotationPresent(DoFn.RequiresTimeSortedInput.class);
 
     Type[] params = m.getGenericParameterTypes();
 
@@ -886,6 +887,7 @@ public class DoFnSignatures {
         m,
         methodContext.getExtraParameters(),
         requiresStableInput,
+        requiresTimeSortedInput,
         trackerT,
         windowT,
         DoFn.ProcessContinuation.class.equals(m.getReturnType()));
