@@ -395,9 +395,6 @@ message ParDoPayload {
   // (Optional) Only set when this ParDo can request bundle finalization.
   bool requests_finalization = 8;
 
-  // (Optional) A mapping of local timer family names to timer specifications.
-  map<string, TimerFamilySpec> timer_family_specs = 9;
-  
   // Whether this stage requires time sorted input
   bool requires_time_sorted_input = 10;
 }
