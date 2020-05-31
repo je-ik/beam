@@ -439,6 +439,7 @@ class WatermarkHold<W extends BoundedWindow> implements Serializable {
         // Clear the underlying state to allow the output watermark to progress.
         elementHoldState.clear();
         extraHoldState.clear();
+        extraHoldState.add(timerInternals.currentInputWatermarkTime());
 
         @Nullable Instant newHold = null;
         if (!isFinished) {
