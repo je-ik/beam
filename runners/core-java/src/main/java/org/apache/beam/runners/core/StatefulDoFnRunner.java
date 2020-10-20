@@ -31,7 +31,6 @@ import org.apache.beam.sdk.state.State;
 import org.apache.beam.sdk.state.StateSpec;
 import org.apache.beam.sdk.state.TimeDomain;
 import org.apache.beam.sdk.state.ValueState;
-import org.apache.beam.sdk.state.WatermarkHoldState;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.reflect.DoFnSignature;
 import org.apache.beam.sdk.transforms.reflect.DoFnSignatures;
@@ -60,7 +59,6 @@ public class StatefulDoFnRunner<InputT, OutputT, W extends BoundedWindow>
   private static final String SORT_BUFFER_STATE = "sortBuffer";
   private static final String SORT_BUFFER_MIN_STAMP = "sortBufferMinStamp";
   private static final String SORT_FLUSH_TIMER = "__StatefulParDoSortFlushTimerId";
-  private static final String SORT_FLUSH_WATERMARK_HOLD = "flushWatermarkHold";
 
   private final DoFnRunner<InputT, OutputT> doFnRunner;
   private final StepContext stepContext;
@@ -74,8 +72,6 @@ public class StatefulDoFnRunner<InputT, OutputT, W extends BoundedWindow>
   private final StateTag<BagState<WindowedValue<InputT>>> sortBufferTag;
   private final StateTag<ValueState<Instant>> sortBufferMinStampTag =
       StateTags.makeSystemTagInternal(StateTags.value(SORT_BUFFER_MIN_STAMP, InstantCoder.of()));
-  private final StateTag<WatermarkHoldState> watermarkHold =
-      StateTags.watermarkStateInternal(SORT_FLUSH_WATERMARK_HOLD, TimestampCombiner.LATEST);
 
   public StatefulDoFnRunner(
       DoFnRunner<InputT, OutputT> doFnRunner,
@@ -111,7 +107,7 @@ public class StatefulDoFnRunner<InputT, OutputT, W extends BoundedWindow>
   }
 
   public List<StateTag<?>> getSystemStateTags() {
-    return Arrays.asList(sortBufferTag, sortBufferMinStampTag, watermarkHold);
+    return Arrays.asList(sortBufferTag, sortBufferMinStampTag);
   }
 
   @Override
@@ -263,14 +259,12 @@ public class StatefulDoFnRunner<InputT, OutputT, W extends BoundedWindow>
     minStampState.write(newMinStamp);
     if (newMinStamp.isBefore(BoundedWindow.TIMESTAMP_MAX_VALUE)) {
       setupFlushTimer(namespace, window, newMinStamp);
-    } else {
-      clearWatermarkHold(namespace);
     }
   }
 
   /**
    * Setup timer for flush time @{code flush}. The time is adjusted to respect allowed lateness and
-   * window garbage collection time. Setup watermark hold for the flush time.
+   * window garbage collection time.
    *
    * <p>Note that this is equivalent to {@link org.apache.beam.sdk.state.Timer#withOutputTimestamp}
    * and should be reworked to use that feature once that is stable.
@@ -282,7 +276,6 @@ public class StatefulDoFnRunner<InputT, OutputT, W extends BoundedWindow>
     if (flushWithLateness.isAfter(windowGcTime)) {
       flushWithLateness = windowGcTime;
     }
-    WatermarkHoldState watermark = stepContext.stateInternals().state(namespace, watermarkHold);
     stepContext
         .timerInternals()
         .setTimer(
@@ -292,16 +285,6 @@ public class StatefulDoFnRunner<InputT, OutputT, W extends BoundedWindow>
             flushWithLateness,
             flush,
             TimeDomain.EVENT_TIME);
-    // [BEAM-10533] check if the hold is set (pipelines before release of [BEAM-10533]
-    // this can be removed in soe future versions, when we can assume there is no
-    // running with this state (beam 2.23.0 and older)
-    if (!watermark.isEmpty().read()) {
-      watermark.clear();
-    }
-  }
-
-  private void clearWatermarkHold(StateNamespace namespace) {
-    stepContext.stateInternals().state(namespace, watermarkHold).clear();
   }
 
   /**
