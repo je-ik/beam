@@ -26,6 +26,7 @@ import java.io.OutputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -1286,6 +1287,8 @@ public class DoFnOperator<InputT, OutputT>
      */
     @VisibleForTesting final MapState<String, TimerData> pendingTimersById;
 
+    private Map<String, Instant> timersWithHolds = new HashMap<>();
+
     private FlinkTimerInternals() {
       MapStateDescriptor<String, TimerData> pendingTimersByIdStateDescriptor =
           new MapStateDescriptor<>(
@@ -1325,8 +1328,36 @@ public class DoFnOperator<InputT, OutputT>
           "Timer with id %s is not an event time timer!",
           newTimer.getTimerId());
       if (timerUsesOutputTimestamp(newTimer)) {
-        keyedStateInternals.addWatermarkHoldUsage(newTimer.getOutputTimestamp());
+        addTimerWatermarkHold(newTimer);
       }
+    }
+
+    private void addTimerWatermarkHold(TimerData timer) {
+      String contextTimerId =
+          getContextTimerId(timer.getTimerId(), timer.getNamespace())
+              + Arrays.toString(((ByteBuffer) getKeyedStateBackend().getCurrentKey()).array());
+      Instant previous = timersWithHolds.put(contextTimerId, timer.getOutputTimestamp());
+      Preconditions.checkState(
+          previous == null,
+          "Timer %s is setting hold to %s without removing previous %s",
+          contextTimerId,
+          timer.getOutputTimestamp(),
+          previous);
+      keyedStateInternals.addWatermarkHoldUsage(timer.getOutputTimestamp());
+    }
+
+    private void removeTimerWatermarkHold(TimerData timer) {
+      String contextTimerId =
+          getContextTimerId(timer.getTimerId(), timer.getNamespace())
+              + Arrays.toString(((ByteBuffer) getKeyedStateBackend().getCurrentKey()).array());
+      Instant removed = timersWithHolds.remove(contextTimerId);
+      Preconditions.checkState(
+          removed == null || timer.getOutputTimestamp().equals(removed),
+          "Timer %s removing hold %s while last set was %s",
+          contextTimerId,
+          timer.getOutputTimestamp(),
+          removed);
+      keyedStateInternals.removeWatermarkHoldUsage(timer.getOutputTimestamp());
     }
 
     private void onRemovedEventTimer(TimerData removedTimer) {
@@ -1337,7 +1368,7 @@ public class DoFnOperator<InputT, OutputT>
       // Remove the first occurrence of the output timestamp, if cached
       // Note: There may be duplicate timestamps from other timers, that's ok.
       if (timerUsesOutputTimestamp(removedTimer)) {
-        keyedStateInternals.removeWatermarkHoldUsage(removedTimer.getOutputTimestamp());
+        removeTimerWatermarkHold(removedTimer);
       }
     }
 
@@ -1353,7 +1384,7 @@ public class DoFnOperator<InputT, OutputT>
                 for (TimerData timerData : pendingTimersById.values()) {
                   if (timerData.getDomain() == TimeDomain.EVENT_TIME) {
                     if (timerUsesOutputTimestamp(timerData)) {
-                      keyedStateInternals.addWatermarkHoldUsage(timerData.getOutputTimestamp());
+                      addTimerWatermarkHold(timerData);
                     }
                   }
                 }
