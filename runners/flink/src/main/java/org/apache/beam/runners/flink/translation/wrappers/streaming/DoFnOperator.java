@@ -29,11 +29,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.stream.Collectors;
@@ -1337,12 +1339,9 @@ public class DoFnOperator<InputT, OutputT>
           getContextTimerId(timer.getTimerId(), timer.getNamespace())
               + Arrays.toString(((ByteBuffer) getKeyedStateBackend().getCurrentKey()).array());
       Instant previous = timersWithHolds.put(contextTimerId, timer.getOutputTimestamp());
-      Preconditions.checkState(
-          previous == null,
-          "Timer %s is setting hold to %s without removing previous %s",
-          contextTimerId,
-          timer.getOutputTimestamp(),
-          previous);
+      if (previous != null) {
+        keyedStateInternals.removeWatermarkHoldUsage(previous);
+      }
       keyedStateInternals.addWatermarkHoldUsage(timer.getOutputTimestamp());
     }
 
@@ -1377,22 +1376,29 @@ public class DoFnOperator<InputT, OutputT>
       final Object currentKey = keyedStateBackend.getCurrentKey();
       try (Stream<Object> keys =
           keyedStateBackend.getKeys(PENDING_TIMERS_STATE_NAME, VoidNamespace.INSTANCE)) {
-        keys.forEach(
-            key -> {
-              keyedStateBackend.setCurrentKey(key);
-              try {
-                for (TimerData timerData : pendingTimersById.values()) {
-                  if (timerData.getDomain() == TimeDomain.EVENT_TIME) {
-                    if (timerUsesOutputTimestamp(timerData)) {
-                      addTimerWatermarkHold(timerData);
+        keys.distinct()
+            .forEach(
+                key -> {
+                  keyedStateBackend.setCurrentKey(key);
+                  Set<TimerData> setTimers = new HashSet<>();
+                  try {
+                    for (TimerData timerData : pendingTimersById.values()) {
+                      if (timerData.getDomain() == TimeDomain.EVENT_TIME
+                          && timerUsesOutputTimestamp(timerData)) {
+                        if (setTimers.add(timerData)) {
+                          addTimerWatermarkHold(timerData);
+                        } else {
+                          LOG.warn(
+                              "Timer %s in %s is duplicate. Skipping.",
+                              timerData.getTimerId(), key);
+                        }
+                      }
                     }
+                  } catch (Exception e) {
+                    throw new RuntimeException(
+                        "Exception while reading set of timers for key: " + key, e);
                   }
-                }
-              } catch (Exception e) {
-                throw new RuntimeException(
-                    "Exception while reading set of timers for key: " + key, e);
-              }
-            });
+                });
       } finally {
         if (currentKey != null) {
           keyedStateBackend.setCurrentKey(currentKey);

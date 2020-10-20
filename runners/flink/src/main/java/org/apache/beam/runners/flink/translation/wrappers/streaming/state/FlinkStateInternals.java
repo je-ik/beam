@@ -70,6 +70,8 @@ import org.apache.flink.runtime.state.VoidNamespace;
 import org.apache.flink.runtime.state.VoidNamespaceSerializer;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link StateInternals} that uses a Flink {@link KeyedStateBackend} to manage state.
@@ -78,6 +80,8 @@ import org.joda.time.Instant;
  * stored in a {@link ByteBuffer}.
  */
 public class FlinkStateInternals<K> implements StateInternals {
+
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkStateInternals.class);
 
   private static final StateNamespace globalWindowNamespace =
       StateNamespaces.window(GlobalWindow.Coder.INSTANCE, GlobalWindow.INSTANCE);
@@ -1274,10 +1278,20 @@ public class FlinkStateInternals<K> implements StateInternals {
             VoidNamespace.INSTANCE, VoidNamespaceSerializer.INSTANCE, watermarkHoldStateDescriptor);
     try (Stream<ByteBuffer> keys =
         flinkStateBackend.getKeys(watermarkHoldStateDescriptor.getName(), VoidNamespace.INSTANCE)) {
-      Iterator<ByteBuffer> iterator = keys.iterator();
+      Iterator<ByteBuffer> iterator = keys.distinct().iterator();
       while (iterator.hasNext()) {
         flinkStateBackend.setCurrentKey(iterator.next());
-        mapState.values().forEach(this::addWatermarkHoldUsage);
+        Set<String> seenKeys = new HashSet<>();
+        for (Map.Entry<String, Instant> entry : mapState.entries()) {
+          if (seenKeys.add(entry.getKey())) {
+            addWatermarkHoldUsage(entry.getValue());
+          } else {
+            LOG.warn(
+                "Duplicate key {} in {} ignored while restoring watermark holds",
+                entry.getKey(),
+                flinkStateBackend.getCurrentKey());
+          }
+        }
       }
     }
   }
