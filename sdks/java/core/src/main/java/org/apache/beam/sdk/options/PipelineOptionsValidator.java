@@ -23,6 +23,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Collection;
+import java.util.Set;
 import org.apache.beam.sdk.options.Validation.Required;
 import org.apache.beam.sdk.util.common.ReflectHelpers;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Collections2;
@@ -63,6 +64,22 @@ public class PipelineOptionsValidator {
    */
   public static <T extends PipelineOptions> T validateCli(Class<T> klass, PipelineOptions options) {
     return validate(klass, options, true);
+  }
+
+  /**
+   * Validate that all non-defauly options set to have at least one of the provided scopes.
+   *
+   * @param options the {@link PipelineOptions}
+   * @param requiredScopes set of @{link Validation.Scope}. At least of these scopes must be set on
+   *     all non-default options.
+   */
+  public static void validateScopes(PipelineOptions options, Set<Validation.Scope> requiredScopes) {
+    ProxyInvocationHandler proxy = (ProxyInvocationHandler) Proxy.getInvocationHandler(options);
+    proxy.getOptions()
+        .entrySet()
+        .stream()
+        .filter(e -> !e.getValue().isDefault());
+        // missing way to get annotations from the BoundValue
   }
 
   private static <T extends PipelineOptions> T validate(

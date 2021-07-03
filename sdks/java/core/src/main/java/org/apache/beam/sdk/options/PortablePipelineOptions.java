@@ -49,6 +49,7 @@ public interface PortablePipelineOptions extends PipelineOptions, FileStagingOpt
       "Set the default environment type for running user code. "
           + "Possible options are DOCKER and PROCESS.")
   @Nullable
+  @Validation.AllowedScopes(Validation.Scope.EXPANSION)
   String getDefaultEnvironmentType();
 
   void setDefaultEnvironmentType(String environmentType);
@@ -61,6 +62,7 @@ public interface PortablePipelineOptions extends PipelineOptions, FileStagingOpt
           + "\"env\":{\"<Environment variables 1>\": \"<ENV_VAL>\"} }. "
           + "All fields in the json are optional except command.")
   @Nullable
+  @Validation.AllowedScopes(Validation.Scope.EXPANSION)
   String getDefaultEnvironmentConfig();
 
   void setDefaultEnvironmentConfig(@Nullable String config);

@@ -2163,4 +2163,34 @@ public class PipelineOptionsFactoryTest {
     assertEquals(PipelineOptionType.Enum.BOOLEAN, booleanWrapperDesc.getType());
     assertThat(booleanWrapperDesc.getDefaultValue(), equalTo("false"));
   }
+
+  /** Test interface. */
+  public interface TestAllowedScopes extends PipelineOptions {
+
+    @Validation.AllowedScopes(Validation.Scope.EXPANSION)
+    int getAllowed();
+
+    void setAllowed(int value);
+
+    int getDisallowed();
+
+    void setDisallowed(int value);
+  }
+
+  @Test
+  public void testScopeValidation() {
+    String[] allowedArgs = {"--allowed=1", "--runner=RegisteredTestRunner"};
+    String[] disallowedArgs = {"--disallowed=1", "--runner=RegisteredTestRunner"};
+    TestAllowedScopes opts =
+        PipelineOptionsFactory.fromArgs(allowedArgs)
+            .withValidation()
+            .withAllowedScopes(Validation.Scope.EXPANSION)
+            .as(TestAllowedScopes.class);
+    assertThat(opts.getAllowed(), equalTo(1));
+    expectedException.expect(IllegalArgumentException.class);
+    PipelineOptionsFactory.fromArgs(disallowedArgs)
+        .withValidation()
+        .withAllowedScopes(Validation.Scope.EXPANSION)
+        .as(TestAllowedScopes.class);
+  }
 }

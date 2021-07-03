@@ -44,4 +44,29 @@ public @interface Validation {
      */
     String[] groups() default {};
   }
+
+  /**
+   * Enum of supported scopes for options. By default all options have defined the scope {@code
+   * ALL}.
+   */
+  enum Scope {
+
+    /** The scope is undefined. The option may be used in any scope. */
+    UNDEFINED,
+
+    /**
+     * The option might be used during Pipeline expansion. This includes mostly options that are
+     * supposed to be respected by portable ExpansionService.
+     */
+    EXPANSION
+  }
+
+  /**
+   * A validation scope of an option. A default validation scope ("ALL") is present when an option
+   * is supposed to be used in all available contexts. The context can the be narrowed using for
+   * instance {@code @Validation.Scope("EXPANSION")}.
+   */
+  @interface AllowedScopes {
+    Scope[] value() default {Scope.UNDEFINED};
+  }
 }

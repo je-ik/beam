@@ -46,6 +46,7 @@ import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -125,6 +126,10 @@ class ProxyInvocationHandler implements InvocationHandler, Serializable {
     }
 
     return options;
+  }
+
+  Map<String, BoundValue> getOptions() {
+    return Collections.unmodifiableMap(options);
   }
 
   private ProxyInvocationHandler(

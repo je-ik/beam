@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -202,18 +203,25 @@ public class PipelineOptionsFactory {
     private final boolean validation;
     private final boolean strictParsing;
     private final boolean isCli;
+    private final Set<Validation.Scope> allowedScopes = new HashSet<>();
 
     // Do not allow direct instantiation
     private Builder() {
-      this(new String[0], false, true, false);
+      this(new String[0], false, true, false, Collections.emptyList());
     }
 
-    private Builder(String[] args, boolean validation, boolean strictParsing, boolean isCli) {
+    private Builder(
+        String[] args,
+        boolean validation,
+        boolean strictParsing,
+        boolean isCli,
+        Collection<Validation.Scope> allowedScopes) {
       this.defaultAppName = findCallersClassName();
       this.args = args;
       this.validation = validation;
       this.strictParsing = strictParsing;
       this.isCli = isCli;
+      this.allowedScopes.addAll(allowedScopes);
     }
 
     /**
@@ -255,7 +263,7 @@ public class PipelineOptionsFactory {
      */
     public Builder fromArgs(String... args) {
       checkNotNull(args, "Arguments should not be null.");
-      return new Builder(args, validation, strictParsing, true);
+      return new Builder(args, validation, strictParsing, true, allowedScopes);
     }
 
     /**
@@ -264,7 +272,17 @@ public class PipelineOptionsFactory {
      * PipelineOptions)} for more details about validation.
      */
     public Builder withValidation() {
-      return new Builder(args, true, strictParsing, isCli);
+      return new Builder(args, true, strictParsing, isCli, allowedScopes);
+    }
+
+    /**
+     * Specify allowed scopes of the {@link PipelineOptions}.
+     *
+     * @param scopes the list of allowed scopes. Each specificied option must have one of these
+     *     scopes.
+     */
+    public Builder withAllowedScopes(Validation.Scope... scopes) {
+      return new Builder(args, validation, strictParsing, isCli, Sets.newHashSet(scopes));
     }
 
     /**
@@ -272,7 +290,7 @@ public class PipelineOptionsFactory {
      * arguments.
      */
     public Builder withoutStrictParsing() {
-      return new Builder(args, validation, false, isCli);
+      return new Builder(args, validation, false, isCli, allowedScopes);
     }
 
     /**
@@ -324,6 +342,9 @@ public class PipelineOptionsFactory {
           PipelineOptionsValidator.validateCli(klass, t);
         } else {
           PipelineOptionsValidator.validate(klass, t);
+        }
+        if (!allowedScopes.isEmpty()) {
+          PipelineOptionsValidator.validateScopes(t, allowedScopes);
         }
       }
       return t;

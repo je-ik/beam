@@ -43,6 +43,7 @@ public interface ExperimentalOptions extends PipelineOptions {
           + "be enabled with this flag. If executing against a managed service, please contact the "
           + "service owners before enabling any experiments.")
   @Nullable
+  @Validation.AllowedScopes(Validation.Scope.EXPANSION)
   List<String> getExperiments();
 
   void setExperiments(@Nullable List<String> value);
